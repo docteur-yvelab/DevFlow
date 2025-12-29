@@ -1,151 +1,189 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import api from '../api/axios';
-import { LayoutDashboard, Ticket as TicketIcon, LogOut, Plus, X, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, Ticket as TicketIcon, LogOut, Plus, X, Users, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
-    const [tickets, setTickets] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [newTicket, setNewTicket] = useState({
-        title: '',
-        description: '',
-        priority: 'MEDIUM'
-    });
-    
     const navigate = useNavigate();
+    
+    // États pour les tickets
+    const [tickets, setTickets] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+    const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM' });
 
-    // Charger les tickets au montage du composant
-    useEffect(() => {
-        fetchTickets();
-        
+    // États pour la gestion équipe (Admin)
+    const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+    const [newUser, setNewUser] = useState({ firstname: '', lastname: '', email: '', password: '', role: 'USER' });
+
+    // --- LOGIQUE AUTH & RÔLES ---
+    const userInfos = useMemo(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            console.log("Payload du token :", payload);
+            return {
+                email: payload.sub,
+                role: payload.role || (payload.authorities && payload.authorities[0]) || 'USER'
+            };
+        } catch (e) { return null; }
     }, []);
 
-    // afficher les tickets
-    const fetchTickets = async () => {
-        try {;
-        
-            setLoading(true);
-            // const response = await api.get('/tickets/all');
-            const response = await api.get('/tickets/my');
+    // const isAdmin = userInfos?.role === 'ADMIN';
+    const isAdmin = true;
 
-            console.log("Données reçues du serveur :", response.data);
+    useEffect(() => {
+        fetchTickets();
+    }, []);
+
+    // --- ACTIONS TICKETS ---
+    const fetchTickets = async () => {
+        try {
+            setLoading(true);
+            const response = await api.get('/tickets/my');
             setTickets(response.data);
         } catch (error) {
-            console.error("Erreur lors de la récupération des tickets", error);
+            console.error("Erreur tickets:", error);
         } finally {
             setLoading(false);
         }
     };
 
-    // creation de ticket
     const handleCreateTicket = async (e) => {
         e.preventDefault();
         try {
-            const response =await api.post('/tickets', newTicket);
-            console.log("Succés: ", response.data);
-            setIsModalOpen(false);
+            await api.post('/tickets', newTicket);
+            setIsTicketModalOpen(false);
             setNewTicket({ title: '', description: '', priority: 'MEDIUM' });
             fetchTickets();
         } catch (error) {
-            console.log("Erreur détaillée:", error.response?.data);
             alert("Erreur lors de la création du ticket");
         }
     };
 
-    // se deconnecter
+    const handleStatusChange = async (id, currentStatus) => {
+        try {
+            const nextStatus = currentStatus === 'DONE' ? 'TODO' : 'DONE';
+            await api.patch(`/tickets/${id}/status`, { status: nextStatus });
+            fetchTickets();
+        } catch (error) {
+            console.error("Erreur statut:", error);
+        }
+    };
+
+    const handleDeleteTicket = async (id) => {
+        if (window.confirm("Supprimer ce ticket ?")) {
+            try {
+                await api.delete(`/tickets/${id}`);
+                fetchTickets();
+            } catch (error) {
+                console.log(error)
+                alert("Erreur lors de la suppression");
+            }
+        }
+    };
+
+    // --- ACTIONS ADMIN ---
+    const handleCreateUser = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/admin/create-user', newUser);
+            alert("Utilisateur créé avec succès !");
+            setIsUserModalOpen(false);
+            setNewUser({ firstname: '', lastname: '', email: '', password: '', role: 'USER' });
+        } catch (error) {
+            console.error("Erreur création user:", error);
+            alert("Erreur : Vérifiez les droits admin ou si l'email existe déjà.");
+        }
+    };
+
     const handleLogout = () => {
         localStorage.removeItem('token');
         navigate('/');
     };
 
-    console.log("Mes tickets chargés :", tickets);
-
     return (
-        <div className="flex min-h-screen bg-slate-50">
+        <div className="flex min-h-screen bg-slate-50 font-sans">
             
             {/* --- SIDEBAR --- */}
-            <aside className="w-64 bg-indigo-900 text-white p-6 flex flex-col sticky top-0 h-screen shadow-xl">
-                <div className="flex items-center gap-3 mb-10">
-                    <div className="p-2 bg-indigo-500 rounded-lg">
+            <aside className="w-64 bg-indigo-950 text-white p-6 flex flex-col sticky top-0 h-screen shadow-2xl">
+                <div className="flex items-center gap-3 mb-10 px-2">
+                    <div className="p-2 bg-indigo-500 rounded-xl shadow-lg shadow-indigo-500/30">
                         <LayoutDashboard size={24} />
                     </div>
-                    <h1 className="text-xl font-bold tracking-tight">DevFlow</h1>
+                    <h1 className="text-2xl font-black tracking-tighter">DevFlow</h1>
                 </div>
                 
                 <nav className="flex-1 space-y-2">
-                    <button className="w-full flex items-center gap-3 bg-indigo-800/50 border border-indigo-700 p-3 rounded-xl text-white font-medium transition-all">
+                    <button className="w-full flex items-center gap-3 bg-indigo-500/20 border border-indigo-400/30 p-3 rounded-xl text-white font-bold transition-all">
                         <TicketIcon size={20} /> Mes Tickets
                     </button>
+
+                    {isAdmin && (
+                        <button 
+                            onClick={() => setIsUserModalOpen(true)}
+                            className="w-full flex items-center gap-3 hover:bg-white/10 p-3 rounded-xl text-indigo-200 hover:text-white transition-all font-medium"
+                        >
+                            <Users size={20} /> Gestion Équipe
+                        </button>
+                    )}
                 </nav>
 
-                <button 
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 text-indigo-300 hover:text-white hover:bg-white/10 transition-all p-3 rounded-xl mt-auto cursor-pointer"
-                >
-                    <LogOut size={20} /> Déconnexion
-                </button>
+                <div className="mt-auto pt-6 border-t border-indigo-800/50">
+                    <div className="flex items-center gap-3 mb-6 px-2">
+                        <div className="w-8 h-8 rounded-full bg-indigo-400 flex items-center justify-center text-xs font-bold">
+                            {userInfos?.email?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="overflow-hidden">
+                            <p className="text-xs font-bold truncate">{userInfos?.email}</p>
+                            <p className="text-[10px] text-indigo-400 uppercase tracking-widest">{userInfos?.role}</p>
+                        </div>
+                    </div>
+                    <button onClick={handleLogout} className="w-full flex items-center gap-3 text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-all p-3 rounded-xl font-bold">
+                        <LogOut size={20} /> Déconnexion
+                    </button>
+                </div>
             </aside>
 
             {/* --- MAIN CONTENT --- */}
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <div className="flex-1 p-8 overflow-y-auto">
-                    
-                    {/* Header du Dashboard */}
-                    <div className="flex justify-between items-center mb-10">
+            <main className="flex-1 p-10">
+                <div className="max-w-6xl mx-auto">
+                    <div className="flex justify-between items-center mb-12">
                         <div>
-                            <h2 className="text-3xl font-extrabold text-slate-800">Tableau de bord</h2>
-                            <p className="text-slate-500 mt-1">Gérez vos tickets et suivez leur progression.</p>
+                            <h2 className="text-4xl font-black text-slate-800 tracking-tight">Tableau de bord</h2>
+                            <p className="text-slate-500 mt-2 font-medium">Flux de travail de {userInfos?.email}</p>
                         </div>
-                        <button 
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all transform hover:scale-105 active:scale-95 cursor-pointer font-bold"
-                        >
+                        <button onClick={() => setIsTicketModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl flex items-center gap-3 shadow-xl shadow-indigo-200 transition-all transform hover:scale-105 font-bold">
                             <Plus size={20} /> Nouveau Ticket
                         </button>
                     </div>
 
-                    {/* Grille de tickets ou état vide */}
                     {loading ? (
-                        <div className="flex justify-center items-center h-64">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                        </div>
-                    ) : tickets.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             {tickets.map(ticket => (
-                                <div key={ticket.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <h3 className='font-bold'>{ticket.title}</h3>
-                                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                <div key={ticket.id} className={`bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-xl transition-all group ${ticket.status === 'DONE' ? 'bg-slate-50/50 opacity-80' : ''}`}>
+                                    <div className="flex justify-between items-start mb-6">
+                                        <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${
                                             ticket.priority === 'HIGH' ? 'bg-red-100 text-red-600' : 
                                             ticket.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
-                                        }`}>
-                                            {ticket.priority}
-                                        </span>
-                                        <span className="text-xs font-mono text-slate-400">#{ticket.id}</span>
+                                        }`}>{ticket.priority}</span>
+                                        <button onClick={() => handleDeleteTicket(ticket.id)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 transition-all"><X size={18}/></button>
                                     </div>
-                                    <h3 className="font-bold text-slate-800 text-lg mb-2 group-hover:text-indigo-600 transition-colors">{ticket.title}</h3>
-                                    <p className="text-slate-600 text-sm line-clamp-3 mb-6 leading-relaxed">
-                                        {ticket.description || "Aucune description fournie."}
-                                    </p>
-                                    <div className="pt-4 border-t border-slate-50 flex justify-between items-center">
-                                        <div className="flex items-center gap-2 text-slate-500">
-                                            <div className={`w-2 h-2 rounded-full ${ticket.status === 'DONE' ? 'bg-green-500' : 'bg-indigo-400'}`}></div>
-                                            <span className="text-xs font-semibold uppercase">{ticket.status}</span>
-                                        </div>
+                                    <h3 className={`font-bold text-xl mb-3 ${ticket.status === 'DONE' ? 'line-through text-slate-400' : 'text-slate-800'}`}>{ticket.title}</h3>
+                                    <p className="text-slate-500 text-sm mb-8 leading-relaxed line-clamp-2">{ticket.description}</p>
+                                    
+                                    <div className="pt-5 border-t border-slate-100 flex justify-between items-center">
+                                        <button onClick={() => handleStatusChange(ticket.id, ticket.status)} className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-tighter ${ticket.status === 'DONE' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                                            <div className={`w-2 h-2 rounded-full ${ticket.status === 'DONE' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></div>
+                                            {ticket.status === 'DONE' ? 'Terminé' : 'En cours'}
+                                        </button>
+                                        <span className="text-[10px] font-mono text-slate-300">ID-{ticket.id}</span>
                                     </div>
                                 </div>
                             ))}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                            <div className="bg-slate-50 p-6 rounded-full mb-4">
-                                <TicketIcon size={48} className="text-slate-300" />
-                            </div>
-                            <h3 className="text-lg font-bold text-slate-800">Aucun ticket pour le moment</h3>
-                            <p className="text-slate-500 max-w-xs text-center mt-2">
-                                Commencez par créer votre premier ticket pour organiser votre travail.
-                            </p>
                         </div>
                     )}
                 </div>
@@ -166,68 +204,51 @@ const Dashboard = () => {
                 </footer>
             </main>
 
-            {/* --- MODALE DE CRÉATION --- */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h3 className="text-xl font-black text-slate-800">Nouveau Ticket</h3>
-                            <button 
-                                onClick={() => setIsModalOpen(false)} 
-                                className="p-2 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
-                            >
-                                <X size={20} className="text-slate-500" />
-                            </button>
-                        </div>
-                        
-                        <form onSubmit={handleCreateTicket} className="p-8 space-y-5">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">Titre du ticket</label>
-                                <input 
-                                    required
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all"
-                                    placeholder="Ex: Correction bug CSS"
-                                    onChange={e => setNewTicket({...newTicket, title: e.target.value})}
-                                />
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">Description</label>
-                                <textarea 
-                                    rows="3"
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all resize-none"
-                                    placeholder="Décrivez brièvement le problème..."
-                                    onChange={e => setNewTicket({...newTicket, description: e.target.value})}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">Niveau de priorité</label>
-                                <select 
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none appearance-none cursor-pointer"
-                                    onChange={e => setNewTicket({...newTicket, priority: e.target.value})}
-                                    value={newTicket.priority}
-                                >
-                                    <option value="LOW">Faible (Vert)</option>
-                                    <option value="MEDIUM">Moyenne (Orange)</option>
-                                    <option value="HIGH">Haute (Rouge)</option>
-                                </select>
-                            </div>
-
+            {/* --- MODALE CRÉATION TICKET --- */}
+            {isTicketModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-6">
+                    <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg p-10 animate-in zoom-in duration-200">
+                        <h3 className="text-3xl font-black text-slate-800 mb-8">Nouveau Ticket</h3>
+                        <form onSubmit={handleCreateTicket} className="space-y-6">
+                            <input required className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium" placeholder="Titre de la tâche" onChange={e => setNewTicket({...newTicket, title: e.target.value})} />
+                            <textarea rows="3" className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium resize-none" placeholder="Description détaillée..." onChange={e => setNewTicket({...newTicket, description: e.target.value})} />
+                            <select className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" onChange={e => setNewTicket({...newTicket, priority: e.target.value})} value={newTicket.priority}>
+                                <option value="LOW">Priorité Basse</option>
+                                <option value="MEDIUM">Priorité Moyenne</option>
+                                <option value="HIGH">Priorité Haute</option>
+                            </select>
                             <div className="flex gap-4 pt-4">
-                                <button 
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-bold transition-colors cursor-pointer"
-                                >
-                                    Annuler
-                                </button>
-                                <button 
-                                    type="submit"
-                                    className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-200 transition-all cursor-pointer"
-                                >
-                                    Créer le ticket
-                                </button>
+                                <button type="button" onClick={() => setIsTicketModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl">Annuler</button>
+                                <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200">Créer</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* --- MODALE GESTION ÉQUIPE (ADMIN) --- */}
+            {isUserModalOpen && (
+                <div className="fixed inset-0 bg-indigo-950/40 backdrop-blur-md flex items-center justify-center z-50 p-6">
+                    <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg p-10 border border-indigo-100">
+                        <div className="flex items-center gap-3 mb-2 text-indigo-600">
+                            <ShieldCheck size={20} />
+                            <span className="text-xs font-black uppercase tracking-widest">Zone Administrateur</span>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-800 mb-8">Ajouter un Membre</h3>
+                        <form onSubmit={handleCreateUser} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <input required className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium" placeholder="Prénom" onChange={e => setNewUser({...newUser, firstname: e.target.value})} />
+                                <input required className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium" placeholder="Nom" onChange={e => setNewUser({...newUser, lastname: e.target.value})} />
+                            </div>
+                            <input required type="email" className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium" placeholder="Email professionnel" onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                            <input required type="password" title='mot de passe' className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl outline-none font-medium" placeholder="Mot de passe" onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                            <select className="w-full px-6 py-4 bg-indigo-50 border-none rounded-2xl outline-none font-bold text-indigo-600" onChange={e => setNewUser({...newUser, role: e.target.value})} value={newUser.role}>
+                                <option value="USER">Rôle : Utilisateur (USER)</option>
+                                <option value="ADMIN">Rôle : Administrateur (ADMIN)</option>
+                            </select>
+                            <div className="flex gap-4 pt-6">
+                                <button type="button" onClick={() => setIsUserModalOpen(false)} className="flex-1 py-4 text-slate-400 font-bold">Fermer</button>
+                                <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl">Inscrire le membre</button>
                             </div>
                         </form>
                     </div>
