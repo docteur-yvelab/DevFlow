@@ -10,7 +10,7 @@ import java.util.List;
 
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
-    @Query("SELECT t FROM Ticket t WHERE t.user.email = :email")
+    @Query("SELECT t FROM Ticket t JOIN FETCH t.user WHERE t.user.email = :email")
     List<Ticket> findByUserEmail(@Param("email") String email);
 
     List<Ticket> findByStatus(String status);

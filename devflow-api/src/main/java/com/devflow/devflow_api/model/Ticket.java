@@ -1,5 +1,6 @@
 package com.devflow.devflow_api.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -45,7 +46,8 @@ public class Ticket {
     private User assignedTo;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_user_id") // Changé pour éviter le doublon
+    @JoinColumn(name = "author_user_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "tickets", "authorities"})
     private User user;
 
     @PrePersist
