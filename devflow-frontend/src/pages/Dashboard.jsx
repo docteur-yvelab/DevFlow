@@ -18,13 +18,17 @@ const Dashboard = () => {
     // Charger les tickets au montage du composant
     useEffect(() => {
         fetchTickets();
+        
     }, []);
 
+    // afficher les tickets
     const fetchTickets = async () => {
         try {;
         
             setLoading(true);
-            const response = await api.get('/tickets/all');
+            // const response = await api.get('/tickets/all');
+            const response = await api.get('/tickets/my');
+
             console.log("Données reçues du serveur :", response.data);
             setTickets(response.data);
         } catch (error) {
@@ -34,6 +38,7 @@ const Dashboard = () => {
         }
     };
 
+    // creation de ticket
     const handleCreateTicket = async (e) => {
         e.preventDefault();
         try {
@@ -41,17 +46,20 @@ const Dashboard = () => {
             console.log("Succés: ", response.data);
             setIsModalOpen(false);
             setNewTicket({ title: '', description: '', priority: 'MEDIUM' });
-            fetchTickets(); // Rafraîchir la liste
+            fetchTickets();
         } catch (error) {
             console.log("Erreur détaillée:", error.response?.data);
             alert("Erreur lors de la création du ticket");
         }
     };
 
+    // se deconnecter
     const handleLogout = () => {
         localStorage.removeItem('token');
         navigate('/');
     };
+
+    console.log("Mes tickets chargés :", tickets);
 
     return (
         <div className="flex min-h-screen bg-slate-50">

@@ -20,9 +20,10 @@ public class TicketController {
     }
 
     // Teste d'abord cette route simple
-    @GetMapping("/my")
+    @GetMapping("my")
     public ResponseEntity<List<Ticket>> getMyTickets(Authentication authentication) {
         System.out.println("Route /my appelée par : " + authentication.getName());
+        System.out.println("Requête reçue sur /api/tickets/my pour : " + authentication.getName());
         return ResponseEntity.ok(ticketService.getMyTickets(authentication.getName()));
     }
 

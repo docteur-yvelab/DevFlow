@@ -35,7 +35,6 @@ public class TicketService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         ticket.setUser(user);
-        // Sécurité pour les valeurs par défaut
         if (ticket.getStatus() == null) ticket.setStatus(Status.TODO);
         if (ticket.getPriority() == null) ticket.setPriority(Priority.MEDIUM);
 
